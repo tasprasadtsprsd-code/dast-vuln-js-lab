@@ -1,0 +1,143 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>A02 · Cryptographic Failures — EduVuln</title>
+<link rel="stylesheet" href="shared.css"></head><body>
+<nav class="sidenav"><div class="nav-logo"><span class="logo-icon">🎓</span><div><div class="logo-title">EduVuln Academy</div><div class="logo-sub">OWASP Top 10 Lab</div></div></div><ul>
+<li><a href="index.html">🏠 Home</a></li><li><a href="a01-broken-access.html">A01 · Broken Access Control</a></li>
+<li><a href="a02-crypto.html" class="active">A02 · Cryptographic Failures</a></li><li><a href="a03-injection.html">A03 · Injection</a></li>
+<li><a href="a04-insecure-design.html">A04 · Insecure Design</a></li><li><a href="a05-security-misc.html">A05 · Security Misconfiguration</a></li>
+<li><a href="a06-vuln-components.html">A06 · Vulnerable Components</a></li><li><a href="a07-auth-failures.html">A07 · Auth Failures</a></li>
+<li><a href="a08-integrity.html">A08 · Software Integrity</a></li><li><a href="a09-logging.html">A09 · Logging Failures</a></li>
+<li><a href="a10-ssrf.html">A10 · SSRF</a></li></ul></nav>
+<main>
+<div class="page-hero">
+  <div class="owasp-badge badge-danger">A02:2021 · CRYPTOGRAPHIC FAILURES</div>
+  <h1>Cryptographic Failures</h1>
+  <p>Formerly "Sensitive Data Exposure". Failures related to cryptography that lead to exposure of sensitive data — passwords stored in plaintext or with weak hashes like MD5, data transmitted over HTTP, weak encryption keys.</p>
+</div>
+<div class="info-grid">
+  <div class="info-card"><div class="ic-label">CWE References</div><div class="ic-val">CWE-259, CWE-327, CWE-331</div></div>
+  <div class="info-card"><div class="ic-label">Impact</div><div class="ic-val">Credential theft, data breach, identity fraud</div></div>
+</div>
+
+<div class="card">
+  <h2>Demo 1 — Plaintext & MD5-hashed Passwords</h2>
+  <p>The student database stores passwords in plaintext and as MD5 hashes. MD5 is cryptographically broken — any MD5 hash can be cracked in seconds via rainbow tables.</p>
+  <div class="tabs">
+    <button class="tab active-vuln" onclick="showTab('pwd','vuln',this)">Vulnerable demo</button>
+    <button class="tab" onclick="showTab('pwd','fix',this)">Remediation</button>
+  </div>
+  <div id="pwd-vuln" class="demo-box">
+    <label>Password to "store" (shows cleartext + MD5)</label>
+    <input id="pwd-in" type="text" value="hunter2" placeholder="Enter a password">
+    <button class="btn-vuln" onclick="showWeakStorage()">Store password (vulnerable)</button>
+    <div class="hint">MD5 of "hunter2" → <code>2ab96390c7dbe3439de74d0c9b0b1767</code> — crackable instantly</div>
+    <div class="output" id="pwd-out">—</div>
+  </div>
+  <div id="pwd-fix" class="rem-box" style="display:none">
+    <h3>✅ Remediation</h3>
+    <h4>Use bcrypt, scrypt, or Argon2 — never MD5/SHA1/SHA256 alone for passwords</h4>
+    <pre>// VULNERABLE — plaintext or fast hash
+db.save({ password: userPassword });
+db.save({ password: md5(userPassword) });
+
+// FIXED — bcrypt with work factor ≥ 12 (Node.js)
+const bcrypt = require('bcrypt');
+const SALT_ROUNDS = 12;
+
+// On registration:
+const hash = await bcrypt.hash(plainPassword, SALT_ROUNDS);
+db.save({ passwordHash: hash });
+
+// On login:
+const match = await bcrypt.compare(inputPassword, stored.passwordHash);
+if (!match) return res.status(401).json({ error: 'Invalid credentials' });</pre>
+    <ul>
+      <li>Never store passwords in plaintext — ever.</li>
+      <li>MD5 and SHA-1 are broken for password hashing — they're too fast.</li>
+      <li>bcrypt's work factor makes brute-force computationally expensive.</li>
+      <li>Use Argon2id where possible — it's the current OWASP recommendation.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Demo 2 — Sensitive Data in LocalStorage (Cleartext)</h2>
+  <p>Student exam scores, SSNs, and session tokens are stored in localStorage without encryption. Any XSS payload or browser extension can read them instantly.</p>
+  <div class="tabs">
+    <button class="tab active-vuln" onclick="showTab('clr','vuln',this)">Vulnerable demo</button>
+    <button class="tab" onclick="showTab('clr','fix',this)">Remediation</button>
+  </div>
+  <div id="clr-vuln" class="demo-box">
+    <button class="btn-vuln" onclick="storeCleartext()">Store sensitive data in cleartext</button>
+    <button class="btn-ghost" onclick="readCleartext()" style="margin-left:6px">Read localStorage</button>
+    <button class="btn-ghost" onclick="clearStorage()" style="margin-left:6px">Clear</button>
+    <div class="hint">Open DevTools → Application → Local Storage to see all values</div>
+    <div class="output" id="clr-out">—</div>
+  </div>
+  <div id="clr-fix" class="rem-box" style="display:none">
+    <h3>✅ Remediation</h3>
+    <h4>Keep secrets server-side in HttpOnly cookies — never in localStorage</h4>
+    <pre>// VULNERABLE — sensitive data in localStorage
+localStorage.setItem('student_ssn', '555-01-2345');
+localStorage.setItem('exam_scores', JSON.stringify(scores));
+localStorage.setItem('auth_token', jwtToken);
+
+// FIXED — session token in HttpOnly cookie (server sets it)
+res.cookie('session', token, {
+  httpOnly: true,  // JS cannot read this
+  secure: true,    // HTTPS only
+  sameSite: 'strict',
+  maxAge: 3600000
+});
+
+// Non-sensitive UI state only goes in localStorage
+localStorage.setItem('theme', 'dark');   // safe
+localStorage.setItem('lang', 'en');      // safe</pre>
+    <ul>
+      <li>Treat localStorage as publicly readable — any JS on the page can access it.</li>
+      <li>Never store PII, SSNs, or financial data in client-side storage.</li>
+      <li>Encrypt sensitive data at rest on the server; never on the client.</li>
+    </ul>
+  </div>
+</div>
+</main>
+<script>
+async function md5sim(str){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('').substring(0,32);
+}
+async function showWeakStorage(){
+  const p=document.getElementById('pwd-in').value;
+  const hash=await md5sim(p);
+  document.getElementById('pwd-out').textContent=
+    'Stored in DB (vulnerable):\n'+
+    '  plaintext  : "'+p+'"\n'+
+    '  MD5 hash   : '+hash+'\n\n'+
+    'An attacker with DB access or a backup file gets ALL passwords instantly.\n'+
+    'MD5 cracks: https://crackstation.net — paste the hash and get the password in <1s.';
+}
+function storeCleartext(){
+  localStorage.setItem('student_ssn','555-01-2345');
+  localStorage.setItem('exam_scores',JSON.stringify({math:92,science:88,english:76}));
+  localStorage.setItem('auth_token','eyJhbGciOiJIUzI1NiJ9.eyJpZCI6M30.fakeSig');
+  localStorage.setItem('dob','1999-04-22');
+  readCleartext();
+}
+function readCleartext(){
+  const keys=['student_ssn','exam_scores','auth_token','dob'];
+  const found=keys.filter(k=>localStorage.getItem(k));
+  const out=document.getElementById('clr-out');
+  if(!found.length){out.textContent='Nothing stored yet. Click "Store sensitive data".';return;}
+  out.textContent='localStorage (readable by ANY JS on this origin — including XSS):\n\n'+
+    found.map(k=>k+' = '+localStorage.getItem(k)).join('\n');
+}
+function clearStorage(){
+  ['student_ssn','exam_scores','auth_token','dob'].forEach(k=>localStorage.removeItem(k));
+  document.getElementById('clr-out').textContent='Cleared.';
+}
+function showTab(g,t,btn){
+  document.getElementById(g+'-vuln').style.display=t==='vuln'?'':'none';
+  document.getElementById(g+'-fix').style.display=t==='fix'?'':'none';
+  btn.closest('.tabs').querySelectorAll('.tab').forEach(b=>{b.classList.remove('active-vuln','active-fix');});
+  btn.classList.add(t==='vuln'?'active-vuln':'active-fix');
+}
+</script></body></html>
