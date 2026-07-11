@@ -1,0 +1,343 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>A04 · Insecure Design — EduVuln</title>
+<link rel="stylesheet" href="shared.css"></head><body>
+<nav class="sidenav"><div class="nav-logo"><span class="logo-icon">🎓</span><div><div class="logo-title">EduVuln Academy</div><div class="logo-sub">OWASP Top 10 Lab</div></div></div><ul>
+<li><a href="index.html">🏠 Home</a></li><li><a href="a01-broken-access.html">A01 · Broken Access Control</a></li>
+<li><a href="a02-crypto.html">A02 · Cryptographic Failures</a></li><li><a href="a03-injection.html">A03 · Injection</a></li>
+<li><a href="a04-insecure-design.html" class="active">A04 · Insecure Design</a></li>
+<li><a href="a05-security-misc.html">A05 · Security Misconfiguration</a></li>
+<li><a href="a06-vuln-components.html">A06 · Vulnerable Components</a></li>
+<li><a href="a07-auth-failures.html">A07 · Auth Failures</a></li>
+<li><a href="a08-integrity.html">A08 · Software Integrity</a></li>
+<li><a href="a09-logging.html">A09 · Logging Failures</a></li>
+<li><a href="a10-ssrf.html">A10 · SSRF</a></li></ul></nav>
+<main>
+<div class="page-hero">
+  <div class="owasp-badge badge-danger">A04:2021 · INSECURE DESIGN</div>
+  <h1>Insecure Design</h1>
+  <p>Design flaws that cannot be fixed by a perfect implementation — missing rate limits, client-side business logic, insecure password reset flows, and no brute-force protection.</p>
+</div>
+<div class="info-grid">
+  <div class="info-card"><div class="ic-label">CWE References</div><div class="ic-val">CWE-209, CWE-307, CWE-602</div></div>
+  <div class="info-card"><div class="ic-label">Impact</div><div class="ic-val">Account takeover, business logic abuse, enumeration</div></div>
+</div>
+<div id="demo-content"></div>
+</main>
+<script>
+const PAGE='a04-insecure-design';
+const demos={
+'a04-insecure-design':{
+  d1:{title:'Demo 1 — No Rate Limit on Login (Brute Force)',
+    desc:'The login form accepts unlimited attempts with no lockout, delay, or CAPTCHA. An attacker can try thousands of passwords per second.',
+    vuln:`<label>Username</label><input id="d1u" value="alice"><label>Password</label><input id="d1p" type="text" value="wrong"><button class="btn-vuln" onclick="bruteForce()">Launch brute force (10 attempts)</button><div class="output" id="d1-out">—</div><div class="hint">In a real attack: try 10,000 passwords/min with no throttle</div>`,
+    fix:`<h3>✅ Remediation</h3><h4>Add rate limiting, lockout, and CAPTCHA</h4><pre>// Express rate limiter
+const rateLimit = require('express-rate-limit');
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,  // 15 minutes
+  max: 5,                      // 5 attempts per window
+  message: 'Too many login attempts — try again in 15 minutes'
+});
+app.post('/login', loginLimiter, loginHandler);
+
+// Account lockout after N failures
+if (user.failedAttempts >= 5) {
+  user.lockedUntil = Date.now() + 15 * 60 * 1000;
+  await user.save();
+  return res.status(423).json({ error: 'Account locked' });
+}</pre><ul><li>Add CAPTCHA after 3 failed attempts.</li><li>Implement progressive delay (1s, 2s, 4s...) between attempts.</li><li>Alert the account owner via email on repeated failures.</li></ul>`},
+  d2:{title:'Demo 2 — Client-Side Price Validation',
+    desc:'The course enrollment price is validated only in JavaScript. An attacker can intercept and modify the price before the server processes it.',
+    vuln:`<label>Course price (client-enforced — edit this!)</label><input id="d2p" type="number" value="299" min="0"><button class="btn-vuln" onclick="clientSidePrice()">Enroll at this price</button><div class="hint">Change the price to 0 or -1 — the server never re-validates</div><div class="output" id="d2-out">—</div>`,
+    fix:`<h3>✅ Remediation</h3><h4>Validate ALL business logic server-side</h4><pre>// VULNERABLE — price comes from client
+app.post('/enroll', (req, res) => {
+  const { courseId, price } = req.body; // trusting client!
+  charge(user, price);
+});
+
+// FIXED — server looks up the authoritative price
+app.post('/enroll', authenticate, async (req, res) => {
+  const { courseId } = req.body;
+  const course = await db.courses.findById(courseId);
+  if (!course) return res.status(404).json({ error: 'Not found' });
+  // price comes from DB, never from the client
+  await charge(req.session.userId, course.price);
+  res.json({ enrolled: true, charged: course.price });
+});</pre><ul><li>Never trust any value from the client for financial transactions.</li><li>Log price mismatches between client and server as potential attacks.</li></ul>`}
+},
+'a05-security-misc':{
+  d1:{title:'Demo 1 — Verbose Error Message (Stack Trace Exposure)',
+    desc:'Unhandled errors expose full stack traces, server paths, framework versions, and DB query details to the attacker — a blueprint for further attacks.',
+    vuln:`<label>Trigger a simulated server error</label><select id="d1e"><option value="db">Database connection error</option><option value="auth">Auth module crash</option><option value="file">File read error</option></select><button class="btn-vuln" onclick="triggerError()">Trigger error (verbose)</button><button class="btn-sec" onclick="triggerSafeError()" style="margin-left:6px">Trigger error (safe)</button><div class="output" id="d1-out">—</div>`,
+    fix:`<h3>✅ Remediation</h3><h4>Show generic errors to users; log full details server-side</h4><pre>// VULNERABLE — stack trace returned to client
+app.use((err, req, res, next) => {
+  res.status(500).json({ error: err.message, stack: err.stack });
+});
+
+// FIXED — generic message to client, full log server-side
+app.use((err, req, res, next) => {
+  const errId = crypto.randomUUID();
+  logger.error({ errId, err, path: req.path }); // server-side log
+  res.status(500).json({
+    error: 'Something went wrong. Reference: ' + errId
+  }); // user gets a reference ID, not the stack trace
+});</pre><ul><li>Set NODE_ENV=production — Express hides stack traces automatically.</li><li>Use structured logging (pino, winston) with error IDs for correlation.</li><li>Never expose DB errors, file paths, or framework internals to clients.</li></ul>`},
+  d2:{title:'Demo 2 — Missing Security Headers',
+    desc:'This page has no CSP, X-Frame-Options, X-Content-Type-Options, or HSTS. DAST scanners flag every missing header as a separate finding.',
+    vuln:`<button class="btn-vuln" onclick="scanHeaders()">Scan response headers (simulated)</button><div class="output" id="d2-out">—</div>`,
+    fix:`<h3>✅ Remediation</h3><h4>Add all security headers — use helmet for Node.js</h4><pre>import helmet from 'helmet';
+app.use(helmet()); // sets all headers below automatically
+
+// Or manually:
+res.setHeader('Content-Security-Policy', "default-src 'self'");
+res.setHeader('X-Frame-Options', 'DENY');
+res.setHeader('X-Content-Type-Options', 'nosniff');
+res.setHeader('Referrer-Policy', 'no-referrer');
+res.setHeader('Permissions-Policy', 'camera=(), microphone=()');
+res.setHeader('Strict-Transport-Security',
+  'max-age=31536000; includeSubDomains');</pre><ul><li>Audit your live site at https://securityheaders.com.</li><li>Start CSP in report-only mode before enforcing it.</li></ul>`}
+},
+'a06-vuln-components':{
+  d1:{title:'Demo 1 — Prototype Pollution (lodash CVE-2019-10744)',
+    desc:'Versions of lodash before 4.17.12 allow an attacker to pollute Object.prototype via a crafted payload, affecting all objects in the application.',
+    vuln:`<label>Malicious merge payload (lodash.merge prototype pollution)</label><textarea id="d1p">{"__proto__":{"isAdmin":true,"polluted":"yes"}}</textarea><button class="btn-vuln" onclick="protoPolute()">Run merge (vulnerable)</button><div class="hint">After merge, ALL plain objects inherit isAdmin=true</div><div class="output" id="d1-out">—</div>`,
+    fix:`<h3>✅ Remediation</h3><h4>Update lodash and sanitize keys before deep merge</h4><pre>// Check for outdated packages:
+npm audit
+npm audit fix
+
+// Sanitize keys before any deep merge
+function safeMerge(target, source) {
+  for (const key of Object.keys(source)) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      continue; // skip dangerous keys
+    }
+    if (typeof source[key] === 'object') {
+      target[key] = target[key] || {};
+      safeMerge(target[key], source[key]);
+    } else {
+      target[key] = source[key];
+    }
+  }
+}
+
+// Or use structuredClone() — prototype-safe in modern JS
+const merged = { ...target, ...JSON.parse(userInput) };</pre><ul><li>Run npm audit in CI/CD on every build and block deployments with critical CVEs.</li><li>Use Snyk or Dependabot for automatic dependency vulnerability alerts.</li><li>Pin dependency versions and review changelogs before upgrading.</li></ul>`},
+  d2:{title:'Demo 2 — Version Disclosure',
+    desc:'The app exposes its tech stack and versions in HTTP headers and HTML comments — giving attackers a shopping list of CVEs to try.',
+    vuln:`<button class="btn-vuln" onclick="showVersions()">Reveal version headers</button><div class="output" id="d2-out">—</div>`,
+    fix:`<h3>✅ Remediation</h3><h4>Remove all version disclosure from headers and HTML</h4><pre>// Express — disable X-Powered-By
+app.disable('x-powered-by');
+// Or with helmet (already included):
+app.use(helmet({ hidePoweredBy: true }));
+
+// Nginx — hide version
+server_tokens off;
+
+// Remove HTML comments before shipping
+// Build tools: use html-minifier or terser to strip comments
+// webpack: remove comments in production mode automatically</pre><ul><li>Never put version numbers in HTML comments, meta tags, or response headers.</li><li>Security through obscurity is not a substitute for patching — but don't help attackers either.</li></ul>`}
+},
+'a07-auth-failures':{
+  d1:{title:'Demo 1 — Weak Session Token',
+    desc:'Session tokens are generated from Math.random() — a non-cryptographic PRNG. Tokens are predictable and can be forged by an attacker who observes a few samples.',
+    vuln:`<button class="btn-vuln" onclick="genWeakToken()">Generate session token (Math.random)</button><button class="btn-sec" onclick="genStrongToken()" style="margin-left:6px">Generate token (crypto.getRandomValues)</button><div class="output" id="d1-out">—</div>`,
+    fix:`<h3>✅ Remediation</h3><h4>Use a cryptographically secure PRNG for all tokens</h4><pre>// VULNERABLE — Math.random is not cryptographically secure
+const token = Math.random().toString(36).slice(2);
+
+// FIXED — browser
+const array = new Uint8Array(32);
+crypto.getRandomValues(array);
+const token = Array.from(array, b => b.toString(16).padStart(2,'0')).join('');
+
+// FIXED — Node.js
+const { randomBytes } = require('crypto');
+const token = randomBytes(32).toString('hex'); // 256-bit secure token
+
+// Use a battle-tested session library
+const session = require('express-session');
+app.use(session({ secret: process.env.SESSION_SECRET, resave: false,
+  saveUninitialized: false, cookie: { httpOnly: true, secure: true } }));</pre><ul><li>Session tokens must be at least 128 bits of entropy from a CSPRNG.</li><li>Invalidate tokens immediately on logout — server-side, not just client-side.</li><li>Set cookies with HttpOnly, Secure, and SameSite=Strict.</li></ul>`},
+  d2:{title:'Demo 2 — No Logout / Session Fixation',
+    desc:'Clicking "logout" only clears localStorage. The server-side session remains active — an attacker with the token can continue using it indefinitely.',
+    vuln:`<button class="btn-vuln" onclick="fakeLogin()">Login (vulnerable)</button><button class="btn-vuln" onclick="fakeLogout()" style="margin-left:6px">Logout (only clears localStorage)</button><div class="hint">After logout, the token still works server-side for hours</div><div class="output" id="d2-out">—</div>`,
+    fix:`<h3>✅ Remediation</h3><h4>Invalidate session server-side on logout</h4><pre>// VULNERABLE — client-only logout
+function logout() {
+  localStorage.removeItem('session_token'); // server session still active!
+}
+
+// FIXED — call the server to invalidate the session
+async function logout() {
+  await fetch('/api/logout', {
+    method: 'POST',
+    credentials: 'include'  // sends the session cookie
+  });
+  // Server: req.session.destroy()
+  window.location.href = '/login';
+}
+
+// Server:
+app.post('/api/logout', (req, res) => {
+  req.session.destroy(err => {
+    res.clearCookie('session');
+    res.json({ loggedOut: true });
+  });
+});</pre><ul><li>Always invalidate sessions server-side — the client cannot be trusted to "forget" a token.</li><li>Set an absolute session timeout (e.g. 8 hours) in addition to idle timeout.</li></ul>`}
+},
+'a08-integrity':{
+  d1:{title:'Demo 1 — CDN Script Without SRI Hash',
+    desc:'Loading a third-party script from a CDN without a Subresource Integrity (SRI) hash means a compromised CDN can serve malicious code and your page will execute it silently.',
+    vuln:`<button class="btn-vuln" onclick="showNoSRI()">Show script tag without SRI</button><button class="btn-sec" onclick="showWithSRI()" style="margin-left:6px">Show script tag with SRI</button><div class="output" id="d1-out">—</div>`,
+    fix:`<h3>✅ Remediation</h3><h4>Always add integrity and crossorigin attributes to external scripts</h4><pre>&lt;!-- VULNERABLE — no integrity check --&gt;
+&lt;script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"&gt;&lt;/script&gt;
+
+&lt;!-- FIXED — SRI hash prevents tampered files from loading --&gt;
+&lt;script
+  src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"
+  integrity="sha256-qXBd/EfAdjOA2FGrGAG+b3YBn2tn5A6bhz+LSgYD96k="
+  crossorigin="anonymous"&gt;&lt;/script&gt;
+
+// Generate SRI hash:
+// https://www.srihash.org
+// Or: openssl dgst -sha384 -binary file.js | openssl base64 -A</pre><ul><li>Every external script and stylesheet should have an SRI hash.</li><li>Use a Content Security Policy with require-sri-for to enforce it.</li><li>Self-host critical dependencies when possible to avoid CDN trust entirely.</li></ul>`},
+  d2:{title:'Demo 2 — Insecure JSON Deserialization',
+    desc:'The app accepts a base64-encoded JSON blob and deserializes it without validation. A crafted payload can override internal object properties and escalate privileges.',
+    vuln:`<label>Serialized session blob (base64 JSON)</label><textarea id="d2p">eyJyb2xlIjoic3R1ZGVudCIsImlkIjozfQ==</textarea><button class="btn-vuln" onclick="deserialize()">Deserialize (no validation)</button><div class="hint">Try: <code>eyJyb2xlIjoiYWRtaW4iLCJpZCI6MX0=</code> (role:admin)</div><div class="output" id="d2-out">—</div>`,
+    fix:`<h3>✅ Remediation</h3><h4>Validate schema after deserialization; sign payloads with HMAC</h4><pre>// VULNERABLE — deserialize and trust
+const data = JSON.parse(atob(blob));
+applySession(data);  // role could be anything!
+
+// FIXED — use signed tokens (JWT / itsdangerous pattern)
+const jwt = require('jsonwebtoken');
+const SECRET = process.env.JWT_SECRET;
+
+// Sign on issue:
+const token = jwt.sign({ role: 'student', id: 3 }, SECRET,
+  { expiresIn: '1h', algorithm: 'HS256' });
+
+// Verify on receipt — throws if tampered:
+const payload = jwt.verify(token, SECRET);
+
+// Also validate schema after parsing
+const { error } = sessionSchema.validate(payload); // zod/joi
+if (error) throw new Error('Invalid session data');</pre><ul><li>Never accept a serialized payload that the client could have modified.</li><li>Always sign payloads with HMAC-SHA256 or use asymmetric JWT (RS256).</li><li>Validate the schema of deserialized data before using it.</li></ul>`}
+},
+'a09-logging':{
+  d1:{title:'Demo 1 — Log Injection via User Input',
+    desc:'User input is written directly into log files without sanitization. An attacker can inject fake log lines to cover their tracks or confuse SIEM analysis.',
+    vuln:`<label>Username to log (inject fake log entries)</label><input id="d1u" value='alice\n[INFO] Login successful for admin\n[WARN] Security check passed'><button class="btn-vuln" onclick="logInject()">Log this (vulnerable)</button><div class="output" id="d1-out">—</div><div class="hint">The newline splits into separate fake log lines</div>`,
+    fix:`<h3>✅ Remediation</h3><h4>Sanitize log entries — strip/encode control characters</h4><pre>// VULNERABLE
+logger.info('Login attempt for user: ' + username);
+
+// FIXED — sanitize before logging
+function sanitizeForLog(input) {
+  return String(input)
+    .replace(/[\r\n\t]/g, ' ')   // remove line breaks and tabs
+    .replace(/[\x00-\x1f]/g, '') // strip other control chars
+    .slice(0, 200);               // limit length
+}
+logger.info('Login attempt for user: ' + sanitizeForLog(username));
+
+// Better — use structured logging (pino/winston JSON format)
+logger.info({ event: 'login_attempt', username }); // no injection possible</pre><ul><li>Structured JSON logging (pino, winston JSON transport) eliminates injection.</li><li>Never build log lines by string concatenation with user input.</li><li>Truncate input fields — a 10,000-char username is almost certainly an attack.</li></ul>`},
+  d2:{title:'Demo 2 — No Logging of Security Events',
+    desc:'Failed logins, access denials, and admin actions are not logged at all. An attacker can run a credential stuffing campaign for hours with no detection.',
+    vuln:`<label>Simulate failed login attempts (no logging)</label><input id="d2u" value="alice" placeholder="username"><button class="btn-vuln" onclick="silentFail()">Fail login 5 times (silently)</button><div class="output" id="d2-out">—</div>`,
+    fix:`<h3>✅ Remediation</h3><h4>Log all authentication events with IP, user agent, and timestamp</h4><pre>// Every auth event should be logged
+logger.warn({
+  event: 'login_failure',
+  username: req.body.username,
+  ip: req.ip,
+  userAgent: req.headers['user-agent'],
+  timestamp: new Date().toISOString()
+});
+
+// Alert on repeated failures (e.g. via Slack/PagerDuty)
+const failures = await cache.incr('login_fail:' + ip);
+if (failures >= 5) {
+  await alertSecurityTeam({ event: 'brute_force', ip });
+}
+
+// OWASP logging checklist:
+// ✓ Authentication success/failure
+// ✓ Access control failures (403s)
+// ✓ Input validation failures
+// ✓ Admin/privileged actions
+// ✓ Session management events</pre><ul><li>Centralize logs in a SIEM (Splunk, Elastic, Datadog) with alerting rules.</li><li>Retain security logs for at least 90 days (12 months for compliance).</li><li>Test your detection by running simulated attacks in staging.</li></ul>`}
+},
+'a10-ssrf':{
+  d1:{title:'Demo 1 — Server Fetches User-Supplied URL',
+    desc:'The course thumbnail preview fetches any URL provided by the user. An attacker supplies http://169.254.169.254/ (AWS metadata) or internal service addresses to exfiltrate credentials.',
+    vuln:`<label>URL to fetch (course thumbnail)</label><input id="d1u" value="http://169.254.169.254/latest/meta-data/" placeholder="Enter URL"><button class="btn-vuln" onclick="runSSRF()">Fetch URL (no validation)</button><div class="hint">Try: <code>http://169.254.169.254/latest/meta-data/iam/security-credentials/</code> · <code>http://localhost:22</code> · <code>http://10.0.0.1/admin</code></div><div class="output" id="d1-out">—</div>`,
+    fix:`<h3>✅ Remediation</h3><h4>Validate URLs against an allowlist — block private and metadata IP ranges</h4><pre>const { URL } = require('url');
+const dns = require('dns').promises;
+const ipRangeCheck = require('ip-range-check');
+
+const BLOCKED = ['10.0.0.0/8','172.16.0.0/12','192.168.0.0/16',
+  '127.0.0.0/8','169.254.0.0/16','::1/128','fc00::/7'];
+
+async function safeGet(rawUrl) {
+  const url = new URL(rawUrl);              // throws on invalid URL
+  if (!['http:','https:'].includes(url.protocol)) throw new Error();
+  const { address } = await dns.lookup(url.hostname);
+  if (ipRangeCheck(address, BLOCKED)) {
+    throw new Error('Blocked: private/internal address');
+  }
+  return fetch(url.href, { redirect: 'error' }); // no redirect following
+}
+
+// Better: use an allowlist of permitted domains
+const ALLOWED_HOSTS = new Set(['images.example.com','cdn.example.com']);
+if (!ALLOWED_HOSTS.has(url.hostname)) throw new Error('Not allowed');</pre><ul><li>Re-validate after each redirect hop — SSRF can be hidden in redirect chains.</li><li>Run outbound HTTP calls through an egress proxy with allowlist enforcement.</li><li>Disable cloud metadata endpoints in production or restrict via IMDSv2 (AWS).</li></ul>`},
+  d2:{title:'Demo 2 — Open Redirect Chained with SSRF',
+    desc:'An open redirect on the same server can be chained with SSRF to bypass allowlist checks — the server follows a redirect from an allowed domain to an internal address.',
+    vuln:`<label>Simulate redirect chain bypass</label><input id="d2u" value="https://allowed.edu/redirect?to=http://169.254.169.254/"><button class="btn-vuln" onclick="runRedirectChain()">Follow redirect chain (vulnerable)</button><div class="output" id="d2-out">—</div>`,
+    fix:`<h3>✅ Remediation</h3><h4>Disable redirect following and re-validate the final URL</h4><pre>// VULNERABLE — follows all redirects blindly
+const resp = await fetch(url); // follows redirects
+
+// FIXED — disable redirects and re-validate each hop
+async function safeFetch(url) {
+  let current = url;
+  for (let i = 0; i < 3; i++) {
+    await validateUrl(current); // throws if private/internal
+    const resp = await fetch(current, { redirect: 'manual' });
+    if (!resp.headers.get('location')) return resp; // done
+    current = new URL(resp.headers.get('location'), current).href;
+  }
+  throw new Error('Too many redirects');
+}</pre><ul><li>The safest approach: disable redirect following entirely (redirect: 'error').</li><li>Fix open redirects independently — they amplify many other vulnerabilities.</li></ul>`}
+}
+};
+
+const pg = demos[PAGE];
+if(pg){
+  const content = document.getElementById('demo-content');
+  ['d1','d2'].forEach(k=>{
+    const d=pg[k];
+    content.innerHTML+=`<div class="card"><h2>${d.title}</h2><p class="card p" style="font-size:13px;color:var(--muted);margin-bottom:14px">${d.desc}</p>
+<div class="tabs"><button class="tab active-vuln" onclick="showTab('${k}','vuln',this)">Vulnerable demo</button><button class="tab" onclick="showTab('${k}','fix',this)">Remediation</button></div>
+<div id="${k}-vuln" class="demo-box">${d.vuln}</div>
+<div id="${k}-fix" class="rem-box" style="display:none">${d.fix}</div></div>`;
+  });
+}
+
+function showTab(g,t,btn){
+  document.getElementById(g+'-vuln').style.display=t==='vuln'?'':'none';
+  document.getElementById(g+'-fix').style.display=t==='fix'?'':'none';
+  btn.closest('.tabs').querySelectorAll('.tab').forEach(b=>{b.classList.remove('active-vuln','active-fix');});
+  btn.classList.add(t==='vuln'?'active-vuln':'active-fix');
+}
+<script>
+function bruteForce(){
+  const u=document.getElementById('d1u').value;
+  const passwords=['wrong1','wrong2','wrong3','password','123456','qwerty','letmein','monkey','dragon','alice123'];
+  let out='Brute force attack — no rate limit, no lockout:\n\n';
+  passwords.forEach((p,i)=>{out+=`Attempt ${i+1}: ${u}:${p} → ${p==='alice123'?'✅ SUCCESS':'❌ Fail'}\n`;});
+  out+='\nAll 10 attempts completed in <1 second. A real tool tries 10,000+/min.';
+  document.getElementById('d1-out').textContent=out;
+  document.getElementById('d1-out').className='output danger';
+}
+function clientSidePrice(){
+  const p=parseFloat(document.getElementById('d2p').value);
+  const out=document.getElementById('d2-out');
+  out.textContent=`Client submitted price: $${p}\nServer accepted it without re-checking the catalogue price ($299).\nEnrolled at: $${p} — attacker saved $${(299-p).toFixed(2)}`;
+  out.className=p<299?'output danger':'output';
+}
+</script>
