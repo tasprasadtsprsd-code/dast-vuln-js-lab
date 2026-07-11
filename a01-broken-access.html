@@ -1,0 +1,128 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>A01 · Broken Access Control — EduVuln</title>
+<link rel="stylesheet" href="shared.css"></head><body>
+<nav class="sidenav"><div class="nav-logo"><span class="logo-icon">🎓</span><div><div class="logo-title">EduVuln Academy</div><div class="logo-sub">OWASP Top 10 Lab</div></div></div><ul>
+<li><a href="index.html">🏠 Home</a></li><li><a href="a01-broken-access.html" class="active">A01 · Broken Access Control</a></li>
+<li><a href="a02-crypto.html">A02 · Cryptographic Failures</a></li><li><a href="a03-injection.html">A03 · Injection</a></li>
+<li><a href="a04-insecure-design.html">A04 · Insecure Design</a></li><li><a href="a05-security-misc.html">A05 · Security Misconfiguration</a></li>
+<li><a href="a06-vuln-components.html">A06 · Vulnerable Components</a></li><li><a href="a07-auth-failures.html">A07 · Auth Failures</a></li>
+<li><a href="a08-integrity.html">A08 · Software Integrity</a></li><li><a href="a09-logging.html">A09 · Logging Failures</a></li>
+<li><a href="a10-ssrf.html">A10 · SSRF</a></li></ul></nav>
+<main>
+<div class="page-hero">
+  <div class="owasp-badge badge-danger">A01:2021 · #1 MOST CRITICAL</div>
+  <h1>Broken Access Control</h1>
+  <p>Access control enforces policy so users cannot act outside their intended permissions. Failures lead to unauthorized information disclosure, modification, or destruction of data, or performing business functions outside the user's limits.</p>
+</div>
+<div class="info-grid">
+  <div class="info-card"><div class="ic-label">CWE References</div><div class="ic-val">CWE-200, CWE-284, CWE-285</div></div>
+  <div class="info-card"><div class="ic-label">Impact</div><div class="ic-val">Data breach, privilege escalation, account takeover</div></div>
+</div>
+
+<div class="card">
+  <h2>Demo 1 — IDOR (Insecure Direct Object Reference)</h2>
+  <p>You are logged in as Student #3. The API returns any student record by ID without checking that the requester owns it. Change the ID to access other accounts including the admin.</p>
+  <div class="tabs">
+    <button class="tab active-vuln" onclick="showTab('idor','vuln',this)">Vulnerable demo</button>
+    <button class="tab" onclick="showTab('idor','fix',this)">Remediation</button>
+  </div>
+  <div id="idor-vuln" class="demo-box">
+    <label>Fetch student record by ID (you are logged in as #3)</label>
+    <input id="idor-id" type="number" value="3" min="1" max="5">
+    <button class="btn-vuln" onclick="runIDOR()">Fetch record (no auth check)</button>
+    <div class="hint">Try ID <code>1</code> (admin) or <code>2</code> to access other accounts</div>
+    <div class="output" id="idor-out">—</div>
+  </div>
+  <div id="idor-fix" class="rem-box" style="display:none">
+    <h3>✅ Remediation</h3>
+    <h4>Enforce authorization server-side — never trust a client-supplied ID alone</h4>
+    <pre>// VULNERABLE
+app.get('/api/students/:id', (req, res) => {
+  res.json(db.students.find(s => s.id === +req.params.id));
+});
+
+// FIXED — verify session owns the requested resource
+app.get('/api/students/:id', authenticate, (req, res) => {
+  const id = Number(req.params.id);
+  if (id !== req.session.studentId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  const { password, ...safe } = db.students.find(s => s.id === id);
+  res.json(safe); // never return password field
+});</pre>
+    <ul><li>Use UUIDs instead of sequential integers — harder to enumerate.</li>
+    <li>Apply authorization checks at every API layer, not just the UI.</li>
+    <li>Log all 403 responses — repeated forbidden access is an attack signal.</li></ul>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Demo 2 — Privilege Escalation via Client-Side Role</h2>
+  <p>The admin flag is stored in localStorage and read client-side to show/hide the admin panel. An attacker simply sets it to true in the browser console.</p>
+  <div class="tabs">
+    <button class="tab active-vuln" onclick="showTab('priv','vuln',this)">Vulnerable demo</button>
+    <button class="tab" onclick="showTab('priv','fix',this)">Remediation</button>
+  </div>
+  <div id="priv-vuln" class="demo-box">
+    <button class="btn-vuln" onclick="escalatePriv()">Escalate to admin (set localStorage flag)</button>
+    <button class="btn-ghost" onclick="resetPriv()" style="margin-left:6px">Reset</button>
+    <div class="output" id="priv-out">—</div>
+    <div id="admin-panel" style="display:none;margin-top:10px;padding:10px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:13px;color:#dc2626;font-weight:600">🔓 ADMIN PANEL UNLOCKED — Delete all records · Export all data · Manage users</div>
+  </div>
+  <div id="priv-fix" class="rem-box" style="display:none">
+    <h3>✅ Remediation</h3>
+    <h4>Roles and permissions must be verified server-side on every request</h4>
+    <pre>// VULNERABLE — role checked client-side
+const isAdmin = localStorage.getItem('role') === 'admin';
+if (isAdmin) showAdminPanel();
+
+// FIXED — role comes from a server-verified session
+// Client just makes the request; server decides the response
+fetch('/api/admin/users', { credentials: 'include' })
+  .then(r => r.status === 200 ? r.json() : Promise.reject(r.status))
+  .then(data => renderAdminPanel(data))
+  .catch(status => { if (status === 403) hideAdminPanel(); });
+
+// Server:
+app.get('/api/admin/users', authenticate, requireRole('admin'), (req, res) => {
+  res.json(db.users);
+});</pre>
+    <ul><li>Never use localStorage/sessionStorage to store roles or permissions.</li>
+    <li>Re-validate role on every sensitive API call — sessions can change.</li></ul>
+  </div>
+</div>
+</main>
+<script>
+const STUDENTS=[
+  {id:1,name:'Prof. Admin',email:'admin@edu.local',role:'admin',gpa:4.0,password:'secret',salary:120000},
+  {id:2,name:'Bob Jones',email:'bob@student.edu',role:'student',gpa:3.1,password:'pass1'},
+  {id:3,name:'Alice Chen',email:'alice@student.edu',role:'student',gpa:3.8,password:'pass2'},
+  {id:4,name:'Carlos Diaz',email:'carlos@student.edu',role:'student',gpa:2.9,password:'pass3'},
+  {id:5,name:'Diana Patel',email:'diana@student.edu',role:'student',gpa:3.5,password:'pass4'},
+];
+const SESSION=3;
+function runIDOR(){
+  const id=parseInt(document.getElementById('idor-id').value);
+  const u=STUDENTS.find(s=>s.id===id);
+  const out=document.getElementById('idor-out');
+  if(!u){out.textContent='No student found.';return;}
+  out.className='output'+(id!==SESSION?' danger':'');
+  out.textContent=(id!==SESSION?'[UNAUTHORIZED ACCESS — no check performed]\n':'[Your own record]\n')+
+    JSON.stringify(u,null,2);
+}
+function escalatePriv(){
+  localStorage.setItem('role','admin');
+  document.getElementById('priv-out').textContent='localStorage.setItem("role","admin") — done.\nThe admin panel below is now visible because the app trusts this client-side value.';
+  document.getElementById('admin-panel').style.display='block';
+}
+function resetPriv(){
+  localStorage.removeItem('role');
+  document.getElementById('priv-out').textContent='Reset. Admin panel hidden.';
+  document.getElementById('admin-panel').style.display='none';
+}
+function showTab(group,tab,btn){
+  document.getElementById(group+'-vuln').style.display=tab==='vuln'?'':'none';
+  document.getElementById(group+'-fix').style.display=tab==='fix'?'':'none';
+  btn.closest('.tabs').querySelectorAll('.tab').forEach(b=>{b.classList.remove('active-vuln','active-fix');});
+  btn.classList.add(tab==='vuln'?'active-vuln':'active-fix');
+}
+</script></body></html>
