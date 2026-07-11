@@ -1,0 +1,136 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>A03 · Injection — EduVuln</title>
+<link rel="stylesheet" href="shared.css"></head><body>
+<nav class="sidenav"><div class="nav-logo"><span class="logo-icon">🎓</span><div><div class="logo-title">EduVuln Academy</div><div class="logo-sub">OWASP Top 10 Lab</div></div></div><ul>
+<li><a href="index.html">🏠 Home</a></li><li><a href="a01-broken-access.html">A01 · Broken Access Control</a></li>
+<li><a href="a02-crypto.html">A02 · Cryptographic Failures</a></li><li><a href="a03-injection.html" class="active">A03 · Injection</a></li>
+<li><a href="a04-insecure-design.html">A04 · Insecure Design</a></li><li><a href="a05-security-misc.html">A05 · Security Misconfiguration</a></li>
+<li><a href="a06-vuln-components.html">A06 · Vulnerable Components</a></li><li><a href="a07-auth-failures.html">A07 · Auth Failures</a></li>
+<li><a href="a08-integrity.html">A08 · Software Integrity</a></li><li><a href="a09-logging.html">A09 · Logging Failures</a></li>
+<li><a href="a10-ssrf.html">A10 · SSRF</a></li></ul></nav>
+<main>
+<div class="page-hero">
+  <div class="owasp-badge badge-danger">A03:2021 · INJECTION</div>
+  <h1>Injection</h1>
+  <p>Injection flaws occur when untrusted data is sent to an interpreter as part of a command or query. Includes SQL injection, XSS (HTML injection), command injection, and template injection.</p>
+</div>
+<div class="info-grid">
+  <div class="info-card"><div class="ic-label">CWE References</div><div class="ic-val">CWE-79, CWE-89, CWE-77</div></div>
+  <div class="info-card"><div class="ic-label">Impact</div><div class="ic-val">Data exfiltration, account takeover, RCE</div></div>
+</div>
+
+<div class="card">
+  <h2>Demo 1 — Reflected XSS via innerHTML</h2>
+  <p>The search query is reflected into the DOM using innerHTML with no sanitization. Any HTML/script payload in the query string executes in the user's browser with full page privileges.</p>
+  <div class="tabs">
+    <button class="tab active-vuln" onclick="showTab('xss','vuln',this)">Vulnerable demo</button>
+    <button class="tab" onclick="showTab('xss','fix',this)">Remediation</button>
+  </div>
+  <div id="xss-vuln" class="demo-box">
+    <label>Course search query</label>
+    <input id="xss-in" type="text" placeholder="Try: &lt;img src=x onerror=alert('XSS!')&gt;">
+    <button class="btn-vuln" onclick="runXSS()">Search (innerHTML — vulnerable)</button>
+    <button class="btn-sec" onclick="runXSSSafe()" style="margin-left:6px">Search (textContent — fixed)</button>
+    <div class="output" id="xss-out">Results appear here…</div>
+  </div>
+  <div id="xss-fix" class="rem-box" style="display:none">
+    <h3>✅ Remediation</h3>
+    <h4>Use textContent for plain strings; DOMPurify when HTML is needed</h4>
+    <pre>// VULNERABLE
+resultDiv.innerHTML = 'Courses matching: ' + userQuery;
+
+// FIXED — textContent never parses HTML
+resultDiv.textContent = 'Courses matching: ' + userQuery;
+
+// FIXED — when HTML output is genuinely required
+import DOMPurify from 'dompurify';
+resultDiv.innerHTML = DOMPurify.sanitize(userQuery);
+
+// Also add Content-Security-Policy header:
+// Content-Security-Policy: default-src 'self'; script-src 'self'</pre>
+    <ul>
+      <li>CSP is the most effective second layer — it stops inline script even if injection occurs.</li>
+      <li>Encode output for the context: HTML encoding for HTML, JS encoding for script blocks.</li>
+      <li>Never build HTML by string concatenation with user data.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Demo 2 — SQL Injection via String Concatenation</h2>
+  <p>The grade lookup query concatenates the student name directly into SQL. The payload <code>' OR '1'='1</code> bypasses the WHERE clause and dumps all records.</p>
+  <div class="tabs">
+    <button class="tab active-vuln" onclick="showTab('sql','vuln',this)">Vulnerable demo</button>
+    <button class="tab" onclick="showTab('sql','fix',this)">Remediation</button>
+  </div>
+  <div id="sql-vuln" class="demo-box">
+    <label>Look up grade by student name</label>
+    <input id="sql-in" type="text" value="alice" placeholder="Try: ' OR '1'='1">
+    <button class="btn-vuln" onclick="runSQLi()">Look up grade</button>
+    <div class="hint">Payloads: <code>' OR '1'='1</code> · <code>'; DROP TABLE grades;--</code></div>
+    <div class="output" id="sql-out">—</div>
+  </div>
+  <div id="sql-fix" class="rem-box" style="display:none">
+    <h3>✅ Remediation</h3>
+    <h4>Use parameterized queries — never interpolate user input into SQL</h4>
+    <pre>// VULNERABLE
+const q = `SELECT * FROM grades WHERE name = '${input}'`;
+db.query(q);
+
+// FIXED — parameterized (Node postgres / mysql2)
+const q = 'SELECT * FROM grades WHERE name = $1';
+const { rows } = await db.query(q, [input]);
+
+// FIXED — ORM (Prisma) parameterizes automatically
+const grades = await prisma.grade.findMany({
+  where: { studentName: input }  // safe — no SQL injection possible
+});</pre>
+    <ul>
+      <li>Parameterized queries guarantee the DB treats input as data, never as SQL syntax.</li>
+      <li>ORMs (Prisma, Sequelize, Drizzle) parameterize by default — prefer them.</li>
+      <li>Never use string formatting, template literals, or concatenation to build SQL.</li>
+    </ul>
+  </div>
+</div>
+</main>
+<script>
+const GRADES=[
+  {name:'alice',course:'Mathematics',grade:'A',score:95},
+  {name:'bob',course:'Science',grade:'B',score:82},
+  {name:'carlos',course:'History',grade:'C',score:71},
+  {name:'diana',course:'English',grade:'A',score:91},
+  {name:'admin',course:'—',grade:'—',score:'CONFIDENTIAL',salary:120000,ssn:'000-00-0001'},
+];
+function runXSS(){
+  const q=document.getElementById('xss-in').value;
+  document.getElementById('xss-out').innerHTML='Courses matching: <b>'+q+'</b>';
+}
+function runXSSSafe(){
+  const q=document.getElementById('xss-in').value;
+  const d=document.getElementById('xss-out');
+  d.textContent='Courses matching (safe): '+q;
+  d.className='output success';
+}
+function runSQLi(){
+  const i=document.getElementById('sql-in').value;
+  const q=`SELECT * FROM grades WHERE name = '${i}'`;
+  const out=document.getElementById('sql-out');
+  let rows;
+  if(/'\s*OR\s*'?1'?\s*=\s*'?1|OR\s+1=1/i.test(i)){
+    rows=GRADES;out.className='output danger';
+    out.textContent='Query: '+q+'\n\n[SQLi bypass — ALL rows returned]:\n'+JSON.stringify(rows,null,2);
+  } else if(/drop|delete|truncate|;/i.test(i)){
+    out.className='output danger';
+    out.textContent='Query: '+q+'\n\n[Destructive payload detected — in a real DB this could wipe tables]';
+  } else {
+    rows=GRADES.filter(g=>g.name===i.toLowerCase());
+    out.className='output';
+    out.textContent='Query: '+q+'\n\n'+(rows.length?JSON.stringify(rows,null,2):'No records found.');
+  }
+}
+function showTab(g,t,btn){
+  document.getElementById(g+'-vuln').style.display=t==='vuln'?'':'none';
+  document.getElementById(g+'-fix').style.display=t==='fix'?'':'none';
+  btn.closest('.tabs').querySelectorAll('.tab').forEach(b=>{b.classList.remove('active-vuln','active-fix');});
+  btn.classList.add(t==='vuln'?'active-vuln':'active-fix');
+}
+</script></body></html>
