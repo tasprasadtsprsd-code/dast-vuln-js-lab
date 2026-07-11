@@ -1,287 +1,68 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JavaScript DAST Vulnerability Lab</title>
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>EduVuln Academy — OWASP Top 10 Lab</title>
+<link rel="stylesheet" href="shared.css">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.6;background:#f8f9fa;color:#1a1a1a}
-.topbar{background:#fff;border-bottom:1px solid #e5e7eb;padding:16px 24px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}
-.topbar h1{font-size:16px;font-weight:600;flex:1}
-.warn-pill{font-size:11px;padding:3px 10px;border-radius:10px;background:#fef3c7;color:#92400e;border:1px solid #fde68a}
-.container{max-width:820px;margin:24px auto;padding:0 16px}
-.vuln-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:14px;overflow:hidden}
-.vuln-head{display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;user-select:none}
-.vuln-head:hover{background:#f9fafb}
-.vnum{width:26px;height:26px;border-radius:50%;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
-.vtitle{font-size:14px;font-weight:600;flex:1}
-.vsev{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700;letter-spacing:.04em}
-.sev-c{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}
-.sev-h{background:#fff7ed;color:#c2410c;border:1px solid #fed7aa}
-.sev-m{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
-.chevron{font-size:18px;color:#9ca3af;transition:transform .2s;display:inline-block}
-.chevron.open{transform:rotate(180deg)}
-.vuln-body{padding:0 16px 16px;display:none}
-.vuln-body.open{display:block}
-.vdesc{font-size:13px;color:#6b7280;margin-bottom:14px;line-height:1.7}
-.tabs{display:flex;gap:6px;margin-bottom:12px}
-.tab{font-size:12px;padding:5px 14px;border-radius:6px;cursor:pointer;border:1px solid #d1d5db;background:#fff;color:#374151;font-weight:500}
-.tab:hover{background:#f3f4f6}
-.tab.active{background:#fef2f2;color:#dc2626;border-color:#fecaca}
-.demo-area{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px}
-.demo-area label{display:block;font-size:11px;color:#6b7280;margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
-.demo-area input,.demo-area textarea{width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:#fff;margin-bottom:8px;font-family:monospace;outline:none}
-.demo-area input:focus,.demo-area textarea:focus{border-color:#6366f1}
-.demo-area textarea{min-height:60px;resize:vertical}
-.demo-area button{padding:6px 14px;border-radius:6px;border:1px solid #d1d5db;background:#fff;cursor:pointer;font-size:12px;font-weight:600;margin-right:6px}
-.demo-area button:hover{background:#f3f4f6}
-.demo-area button.danger{background:#dc2626;color:#fff;border-color:#dc2626}
-.demo-area button.danger:hover{background:#b91c1c}
-.hint{font-size:11px;color:#9ca3af;margin-top:8px}
-.hint code{font-family:monospace;font-size:11px;background:#f3f4f6;padding:1px 5px;border-radius:4px;color:#dc2626}
-.output{font-family:monospace;font-size:12px;background:#111827;color:#a5f3fc;border:1px solid #374151;border-radius:6px;padding:10px;margin-top:10px;min-height:38px;white-space:pre-wrap;word-break:break-all}
-.rem{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px}
-.rem-head{font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
-.rem h4{font-size:13px;font-weight:600;color:#166534;margin-bottom:8px}
-.rem p,.rem li{font-size:12px;color:#374151;line-height:1.7;margin-bottom:4px}
-.rem ul{padding-left:16px;margin-bottom:8px}
-.rem pre{background:#111827;color:#86efac;border:1px solid #166534;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;overflow-x:auto;margin:8px 0;white-space:pre}
-.comment-item{background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:8px 10px;margin:4px 0;font-size:12px}
-</style>
-</head>
-<body>
-
-<div class="topbar">
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-  <h1>JavaScript DAST Vulnerability Lab</h1>
-  <span class="warn-pill">⚠ Local testing only</span>
-</div>
-
-<div class="container" id="vulns"></div>
-
-<script>
-const USERS=[
-  {id:1,username:'admin',email:'admin@corp.internal',role:'admin',password:'hunter2',balance:50000},
-  {id:2,username:'bob',email:'bob@example.com',role:'user',password:'password1',balance:1200},
-  {id:3,username:'alice',email:'alice@example.com',role:'user',password:'qwerty',balance:4800},
-  {id:4,username:'carlos',email:'carlos@example.com',role:'user',password:'letmein',balance:300},
-];
-const SESSION_ID=3;
-let comments=JSON.parse(localStorage.getItem('dast_comments')||'[]');
-
-const VULNS=[
-{id:1,title:'Reflected XSS',sev:'CRITICAL',sevc:'sev-c',
-desc:"The search term is written directly into the DOM via innerHTML with no encoding. An attacker shares a crafted link — the victim's browser executes the payload in the app's origin, exposing cookies and local storage.",
-demoHtml:`<label>Search query</label><input id="xss-r-in" type="text" placeholder="Try: &lt;img src=x onerror=alert('XSS!')&gt;"><button class="danger" onclick="runXSSR()">Search</button><div class="hint">Payload: <code>&lt;img src=x onerror=alert(document.cookie)&gt;</code></div><div class="output" id="xss-r-out">Results appear here…</div>`,
-fix:`// VULNERABLE
-document.getElementById('out').innerHTML = 'Results for: ' + userInput;
-
-// FIXED — textContent never parses HTML
-document.getElementById('out').textContent = 'Results for: ' + userInput;
-
-// FIXED — when rich HTML is needed, sanitize first
-import DOMPurify from 'dompurify';
-el.innerHTML = DOMPurify.sanitize(userInput);`,
-tips:['Set a strict Content-Security-Policy header as a second layer of defence.','Never build HTML by string concatenation — use DOM APIs or a framework with auto-escaping.','Encode all URL query parameters before reflecting them into the page.']
-},
-{id:2,title:'Stored XSS',sev:'CRITICAL',sevc:'sev-c',
-desc:'Comments are persisted in localStorage and re-rendered with innerHTML on every page load. A script payload stored once runs for every user who visits — classic stored XSS applicable to any persistent store.',
-demoHtml:`<label>Post a comment</label><textarea id="xss-s-in" placeholder="Try: &lt;img src=x onerror=alert('Stored XSS!')&gt;"></textarea><button class="danger" onclick="postComment()">Post</button><button onclick="clearComments()" style="margin-left:4px">Clear all</button><div id="comment-list" style="margin-top:8px"></div>`,
-fix:`// VULNERABLE
-commentList.innerHTML += \`<div>\${text}</div>\`;
-
-// FIXED — create nodes, never inject raw markup
-function renderComment(text) {
-  const div = document.createElement('div');
-  div.textContent = text;  // treated as text, never parsed as HTML
-  commentList.appendChild(div);
-}
-
-// Sanitize before storing if HTML is genuinely needed
-import DOMPurify from 'dompurify';
-comments.push(DOMPurify.sanitize(input));`,
-tips:['Sanitize on write AND on render — defense in depth.','Validate length and character set server-side.','CSP blocks inline script even if a payload slips through.']
-},
-{id:3,title:'Open redirect',sev:'HIGH',sevc:'sev-h',
-desc:"After login the app navigates to a user-controlled ?next= parameter with no validation. Attackers craft links like /login?next=https://evil.com — the trusted domain in the original URL lowers the victim's guard.",
-demoHtml:`<label>Redirect destination (?next= parameter)</label><input id="redir-in" type="text" value="https://evil-phish.example.com"><button class="danger" onclick="runRedirect()">Simulate login redirect</button><div class="hint">Real exploit: <code>https://yourapp.com/login?next=https://evil.com</code></div><div class="output" id="redir-out">—</div>`,
-fix:`// VULNERABLE
-location.href = new URLSearchParams(location.search).get('next');
-
-// FIXED — same-origin relative paths only
-function safeRedirect(next) {
-  if (!next || !next.startsWith('/') || next.startsWith('//')) {
-    next = '/dashboard';
-  }
-  location.href = next;
-}
-
-// FIXED — allowlist of trusted origins
-const ALLOWED = new Set(['https://app.example.com']);
-function safeRedirect(next) {
-  try {
-    const url = new URL(next, location.origin);
-    if (!ALLOWED.has(url.origin)) throw new Error();
-    location.href = url.href;
-  } catch { location.href = '/dashboard'; }
-}`,
-tips:['Prefer relative paths over absolute URLs for post-login redirects.','Log and alert on blocked redirect attempts — a signal of active phishing.','Validate after each HTTP redirect hop, not just the initial value.']
-},
-{id:4,title:'Client-side SQL injection',sev:'HIGH',sevc:'sev-h',
-desc:'User input is concatenated into a SQL string before being sent to the server or evaluated against a local DB (WebSQL, SQLite/WASM). Same root cause as server-side SQLi — string interpolation into a query.',
-demoHtml:`<label>Username to look up</label><input id="sqli-in" type="text" value="alice" placeholder="Try: ' OR '1'='1"><button class="danger" onclick="runSQLi()">Query</button><div class="hint">Payload: <code>' OR '1'='1</code> dumps all rows</div><div class="output" id="sqli-out">—</div>`,
-fix:`// VULNERABLE
-const q = \`SELECT * FROM users WHERE username = '\${input}'\`;
-db.exec(q);
-
-// FIXED — parameterized query (sql.js / better-sqlite3)
-const stmt = db.prepare('SELECT * FROM users WHERE username = ?');
-const rows = stmt.all(input);
-
-// For REST APIs — pass raw value; let the server parameterize
-fetch(\`/api/users?username=\${encodeURIComponent(input)}\`);
-// Server: db.query('SELECT * FROM users WHERE username = $1', [req.query.username])`,
-tips:['Never expose raw query interfaces to client-side code.','Use an ORM (Prisma, Drizzle) that parameterizes by default.','Validate and allowlist input format before it reaches any query builder.']
-},
-{id:5,title:'IDOR — broken access control',sev:'HIGH',sevc:'sev-h',
-desc:"The API returns any user's full record given their numeric ID — no check that the session matches the requested resource. Incrementing the ID enumerates all accounts including admin.",
-demoHtml:`<label>Fetch user by ID (you are logged in as user #3)</label><input id="idor-in" type="number" value="3" min="1" max="4"><button class="danger" onclick="runIDOR()">Fetch profile</button><div class="hint">Change to <code>1</code> to read the admin account</div><div class="output" id="idor-out">—</div>`,
-fix:`// VULNERABLE — any ID accepted, no auth check
-fetch(\`/api/users/\${userId}\`);
-
-// FIXED — server enforces ownership (Node/Express)
-app.get('/api/users/:id', authenticate, (req, res) => {
-  const id = Number(req.params.id);
-  if (id !== req.session.userId && !req.session.isAdmin) {
-    return res.status(403).json({ error: 'Forbidden' });
-  }
-  const { password, ...safe } = db.users.find(u => u.id === id);
-  res.json(safe);  // password field never returned
-});`,
-tips:['Derive ownership from the authenticated session server-side — never trust a client-supplied ID alone.','Use opaque UUIDs instead of sequential integers to prevent enumeration.','Never return password hashes or internal fields in API responses.']
-},
-{id:6,title:'CSRF — cross-site request forgery',sev:'MEDIUM',sevc:'sev-m',
-desc:"The transfer endpoint accepts POST requests authenticated only by cookie. An attacker's page triggers the same POST silently — the browser attaches the victim's session cookie automatically.",
-demoHtml:`<label>Transfer amount</label><input id="csrf-amt" type="number" value="500"><label style="margin-top:8px;display:block">Destination account</label><input id="csrf-dest" type="text" value="ATTACKER-9999"><button class="danger" onclick="runCSRF()">Transfer (no CSRF token)</button><div class="hint">A cross-origin form can trigger this silently while you are logged in</div><div class="output" id="csrf-out">—</div>`,
-fix:`// FIXED — include a CSRF token on every mutating request
-const token = document.querySelector('meta[name="csrf-token"]').content;
-fetch('/api/transfer', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'X-CSRF-Token': token  // server validates this
-  },
-  body: JSON.stringify({ amount, dest })
-});
-
-// Server sets cookie with SameSite to block cross-origin POSTs
-res.cookie('session', val, {
-  httpOnly: true,
-  secure: true,
-  sameSite: 'strict'
-});`,
-tips:['SameSite=Strict alone is a strong mitigation on modern browsers — pair it with CSRF tokens for defense in depth.','Verify the Origin/Referer header server-side for sensitive endpoints.','Require re-authentication for high-value actions like payments or password changes.']
-},
-{id:7,title:'Sensitive data in localStorage',sev:'HIGH',sevc:'sev-h',
-desc:'Auth tokens and PII stored in localStorage are accessible to any JavaScript on the same origin — including XSS payloads. A single successful injection exfiltrates all stored secrets instantly.',
-demoHtml:`<button class="danger" onclick="storeSecrets()">Store token + PII in localStorage</button><button onclick="readSecrets()" style="margin-left:4px">Read back</button><button onclick="clearSecrets()" style="margin-left:4px">Clear</button><div class="hint">Open DevTools → Application → Local Storage to inspect</div><div class="output" id="storage-out">—</div>`,
-fix:`// VULNERABLE
-localStorage.setItem('auth_token', jwt);
-const t = localStorage.getItem('auth_token');
-fetch('/api', { headers: { Authorization: \`Bearer \${t}\` } });
-
-// FIXED — HttpOnly cookie: JS can never read the token
-// Server:
-res.cookie('auth', jwt, { httpOnly: true, secure: true, sameSite: 'strict' });
-// Client:
-fetch('/api', { credentials: 'include' }); // cookie sent automatically
-
-// If token must stay client-side (PKCE flows):
-// keep it in a JS variable / React state — never localStorage`,
-tips:['Treat anything in localStorage as readable by an attacker who achieves XSS.','Never store passwords, credit cards, or SSNs in any browser storage.','Consider the BFF (Backend for Frontend) pattern: a server proxy holds the token in an HttpOnly cookie.']
-},
-{id:8,title:'Missing security headers',sev:'MEDIUM',sevc:'sev-m',
-desc:'This page is served without CSP, X-Frame-Options, X-Content-Type-Options, or HSTS. DAST scanners flag their absence because each missing header widens the attack surface for XSS, clickjacking, and MIME-sniffing.',
-demoHtml:`<button class="danger" onclick="checkHeaders()">Scan response headers (simulated)</button><div class="output" id="headers-out">—</div>`,
-fix:`// Node/Express — use helmet (wraps all of these)
-import helmet from 'helmet';
-app.use(helmet());
-
-// Or set manually:
-app.use((req, res, next) => {
-  res.setHeader('Content-Security-Policy',
-    "default-src 'self'; script-src 'self'");
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Referrer-Policy', 'no-referrer');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=()');
-  res.setHeader('Strict-Transport-Security',
-    'max-age=31536000; includeSubDomains');
-  next();
-});`,
-tips:['Use https://securityheaders.com to audit your live site.','Start with CSP in report-only mode, then enforce once you have reviewed the reports.','Nginx: use add_header directives in the server{} block with the "always" flag.']
-}
-];
-
-function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
-
-function buildLab(){
-  const c=document.getElementById('vulns');
-  VULNS.forEach(v=>{
-    const d=document.createElement('div');
-    d.className='vuln-card';
-    d.innerHTML=`<div class="vuln-head" onclick="toggle(${v.id})">
-  <div class="vnum">${v.id}</div>
-  <div class="vtitle">${v.title}</div>
-  <span class="vsev ${v.sevc}">${v.sev}</span>
-  <span class="chevron" id="chev-${v.id}">&#8964;</span>
-</div>
-<div class="vuln-body" id="body-${v.id}">
-  <p class="vdesc">${v.desc}</p>
-  <div class="tabs">
-    <button class="tab active" onclick="showTab(${v.id},'demo',this)">Live demo</button>
-    <button class="tab" onclick="showTab(${v.id},'fix',this)">Remediation</button>
+.hero-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:20px}
+.vuln-tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-decoration:none;color:var(--text);transition:.15s;display:block}
+.vuln-tile:hover{border-color:var(--accent-light);background:var(--accent-bg)}
+.tile-id{font-size:10px;font-weight:700;color:var(--accent);letter-spacing:.08em;margin-bottom:4px}
+.tile-name{font-size:14px;font-weight:700;margin-bottom:4px}
+.tile-desc{font-size:12px;color:var(--muted);line-height:1.5}
+.tile-sev{display:inline-block;margin-top:8px;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700}
+.sev-c{background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger-border)}
+.sev-h{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-border)}
+.sev-m{background:var(--accent-bg);color:var(--accent);border:1px solid #c7d2fe}
+.intro-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:24px}
+.intro-box h2{font-size:16px;font-weight:700;margin-bottom:8px}
+.intro-box p{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:8px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center}
+.stat-n{font-size:24px;font-weight:700;color:var(--accent)}
+.stat-l{font-size:11px;color:var(--muted);margin-top:2px}
+</style></head><body>
+<nav class="sidenav">
+  <div class="nav-logo"><span class="logo-icon">🎓</span><div><div class="logo-title">EduVuln Academy</div><div class="logo-sub">OWASP Top 10 Lab</div></div></div>
+  <ul>
+    <li><a href="index.html" class="active">🏠 Home</a></li>
+    <li><a href="a01-broken-access.html">A01 · Broken Access Control</a></li>
+    <li><a href="a02-crypto.html">A02 · Cryptographic Failures</a></li>
+    <li><a href="a03-injection.html">A03 · Injection</a></li>
+    <li><a href="a04-insecure-design.html">A04 · Insecure Design</a></li>
+    <li><a href="a05-security-misc.html">A05 · Security Misconfiguration</a></li>
+    <li><a href="a06-vuln-components.html">A06 · Vulnerable Components</a></li>
+    <li><a href="a07-auth-failures.html">A07 · Auth Failures</a></li>
+    <li><a href="a08-integrity.html">A08 · Software Integrity</a></li>
+    <li><a href="a09-logging.html">A09 · Logging Failures</a></li>
+    <li><a href="a10-ssrf.html">A10 · SSRF</a></li>
+  </ul>
+</nav>
+<main>
+  <div class="page-hero">
+    <div class="owasp-badge badge-info">OWASP TOP 10 · 2021</div>
+    <h1>EduVuln Academy — Student Security Lab</h1>
+    <p>A hands-on learning platform covering the OWASP Top 10 vulnerabilities. Each module includes a live exploitable demo, explanation of the flaw, and a secure remediation with code examples.</p>
   </div>
-  <div id="demo-${v.id}" class="demo-area">${v.demoHtml}</div>
-  <div id="fix-${v.id}" class="rem" style="display:none">
-    <div class="rem-head">✅ Remediation</div>
-    <h4>Secure code</h4>
-    <pre>${esc(v.fix)}</pre>
-    <ul>${v.tips.map(t=>`<li>${t}</li>`).join('')}</ul>
+  <div class="warn-banner">⚠ This site is intentionally vulnerable. For authorized educational use only. Never deploy on a public server with real users or data.</div>
+  <div class="stats">
+    <div class="stat"><div class="stat-n">10</div><div class="stat-l">Vulnerabilities</div></div>
+    <div class="stat"><div class="stat-n">10</div><div class="stat-l">Live demos</div></div>
+    <div class="stat"><div class="stat-n">10</div><div class="stat-l">Remediations</div></div>
+    <div class="stat"><div class="stat-n">0</div><div class="stat-l">Real data used</div></div>
   </div>
-</div>`;
-    c.appendChild(d);
-  });
-  renderComments();
-}
-
-function toggle(id){
-  const b=document.getElementById('body-'+id);
-  const ch=document.getElementById('chev-'+id);
-  const open=b.classList.toggle('open');
-  ch.classList.toggle('open',open);
-}
-function showTab(id,tab,btn){
-  document.getElementById('demo-'+id).style.display=tab==='demo'?'':'none';
-  document.getElementById('fix-'+id).style.display=tab==='fix'?'':'none';
-  btn.closest('.tabs').querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-}
-function runXSSR(){const q=document.getElementById('xss-r-in').value;document.getElementById('xss-r-out').innerHTML='Results for: <b>'+q+'</b>';}
-function postComment(){const t=document.getElementById('xss-s-in').value.trim();if(!t)return;comments.push(t);localStorage.setItem('dast_comments',JSON.stringify(comments));document.getElementById('xss-s-in').value='';renderComments();}
-function renderComments(){const l=document.getElementById('comment-list');if(!l)return;l.innerHTML='';if(!comments.length){l.innerHTML='<div style="font-size:12px;color:#9ca3af;margin-top:6px">No comments yet.</div>';return;}comments.forEach(c=>{l.innerHTML+=`<div class="comment-item">${c}</div>`;});}
-function clearComments(){comments=[];localStorage.removeItem('dast_comments');renderComments();}
-function runRedirect(){const d=document.getElementById('redir-in').value;document.getElementById('redir-out').textContent='[Simulated] window.location.href = "'+d+'"\nIn a real browser this navigates to the attacker-controlled URL.';}
-function runSQLi(){const i=document.getElementById('sqli-in').value;const q=`SELECT * FROM users WHERE username = '${i}'`;let o='Query sent:\n  '+q+'\n\n';let rows;if(/'\s*OR\s*'?1'?\s*=\s*'?1|OR\s+1=1/i.test(i)){rows=USERS;o+='[SQLi bypass] All '+USERS.length+' rows returned:\n';}else if(/drop|delete|truncate/i.test(i)){document.getElementById('sqli-out').textContent=o+'[Destructive payload detected]';return;}else{rows=USERS.filter(u=>u.username===i);if(!rows.length){document.getElementById('sqli-out').textContent=o+'No rows found.';return;}}rows.forEach(u=>{o+=JSON.stringify({id:u.id,username:u.username,email:u.email,password:u.password,balance:u.balance})+'\n';});document.getElementById('sqli-out').textContent=o;}
-function runIDOR(){const id=parseInt(document.getElementById('idor-in').value);const u=USERS.find(x=>x.id===id);const o=document.getElementById('idor-out');if(!u){o.textContent='User not found.';return;}o.textContent=(id!==SESSION_ID?'[Accessing another user — no auth check!]\n':'[Your own profile]\n')+JSON.stringify({id:u.id,username:u.username,email:u.email,role:u.role,password:u.password,balance:u.balance},null,2);}
-function runCSRF(){const a=document.getElementById('csrf-amt').value;const d=document.getElementById('csrf-dest').value;document.getElementById('csrf-out').textContent='POST /api/transfer  (no X-CSRF-Token header)\n'+JSON.stringify({amount:a,destination:d},null,2)+'\n\n[200 OK] Transfer accepted — a cross-site form could do this silently.';}
-function storeSecrets(){localStorage.setItem('auth_token','eyJhbGciOiJIUzI1NiJ9.eyJ1c2VySWQiOjN9.fakeSignature');localStorage.setItem('user_pii',JSON.stringify({name:'Alice Smith',ssn:'555-01-2345',dob:'1990-06-15'}));localStorage.setItem('credit_card','4111-1111-1111-1111');readSecrets();}
-function readSecrets(){const keys=['auth_token','user_pii','credit_card'];const found=keys.filter(k=>localStorage.getItem(k));const o=document.getElementById('storage-out');if(!found.length){o.textContent='Nothing stored yet.';return;}o.textContent='localStorage (readable by any JS on this origin):\n\n'+found.map(k=>k+':\n  '+localStorage.getItem(k)).join('\n\n');}
-function clearSecrets(){['auth_token','user_pii','credit_card'].forEach(k=>localStorage.removeItem(k));document.getElementById('storage-out').textContent='Cleared.';}
-function checkHeaders(){const m=['Content-Security-Policy','X-Frame-Options','X-Content-Type-Options','Strict-Transport-Security','Referrer-Policy','Permissions-Policy'];const p=['Content-Type: text/html; charset=UTF-8','Cache-Control: no-store'];document.getElementById('headers-out').textContent='PRESENT:\n'+p.map(h=>'  '+h).join('\n')+'\n\nMISSING (DAST will flag these):\n'+m.map(h=>'  ✗ '+h).join('\n');}
-
-buildLab();
-</script>
-</body>
-</html>
+  <div class="intro-box">
+    <h2>How to use this lab</h2>
+    <p>Each page covers one OWASP Top 10 category. Start with the <strong>Vulnerable demo</strong> tab to trigger the flaw yourself, then switch to the <strong>Remediation</strong> tab to see the secure fix with working code.</p>
+    <p>Point a DAST scanner (OWASP ZAP, Burp Suite) at these pages and compare its findings to the known list — then apply the fixes and re-scan to confirm they disappear.</p>
+  </div>
+  <div class="hero-grid">
+    <a class="vuln-tile" href="a01-broken-access.html"><div class="tile-id">A01:2021</div><div class="tile-name">Broken Access Control</div><div class="tile-desc">Users act outside their intended permissions — IDOR, privilege escalation, missing auth checks.</div><span class="tile-sev sev-c">CRITICAL</span></a>
+    <a class="vuln-tile" href="a02-crypto.html"><div class="tile-id">A02:2021</div><div class="tile-name">Cryptographic Failures</div><div class="tile-desc">Sensitive data exposed due to weak or missing encryption — cleartext storage, MD5 hashing.</div><span class="tile-sev sev-c">CRITICAL</span></a>
+    <a class="vuln-tile" href="a03-injection.html"><div class="tile-id">A03:2021</div><div class="tile-name">Injection</div><div class="tile-desc">XSS and SQL injection via unsanitized user input written into queries or the DOM.</div><span class="tile-sev sev-c">CRITICAL</span></a>
+    <a class="vuln-tile" href="a04-insecure-design.html"><div class="tile-id">A04:2021</div><div class="tile-name">Insecure Design</div><div class="tile-desc">Design flaws — unlimited login attempts, client-side business logic, missing rate limits.</div><span class="tile-sev sev-h">HIGH</span></a>
+    <a class="vuln-tile" href="a05-security-misc.html"><div class="tile-id">A05:2021</div><div class="tile-name">Security Misconfiguration</div><div class="tile-desc">Missing security headers, verbose error messages, default credentials left in place.</div><span class="tile-sev sev-h">HIGH</span></a>
+    <a class="vuln-tile" href="a06-vuln-components.html"><div class="tile-id">A06:2021</div><div class="tile-name">Vulnerable Components</div><div class="tile-desc">Using outdated libraries with known CVEs. Prototype pollution, ReDoS, and version exposure.</div><span class="tile-sev sev-h">HIGH</span></a>
+    <a class="vuln-tile" href="a07-auth-failures.html"><div class="tile-id">A07:2021</div><div class="tile-name">Auth Failures</div><div class="tile-desc">Weak session tokens, no logout, no account lockout, credentials in localStorage.</div><span class="tile-sev sev-c">CRITICAL</span></a>
+    <a class="vuln-tile" href="a08-integrity.html"><div class="tile-id">A08:2021</div><div class="tile-name">Software Integrity Failures</div><div class="tile-desc">Loading CDN scripts without SRI hashes, insecure deserialization of JSON payloads.</div><span class="tile-sev sev-h">HIGH</span></a>
+    <a class="vuln-tile" href="a09-logging.html"><div class="tile-id">A09:2021</div><div class="tile-name">Logging Failures</div><div class="tile-desc">No logging of auth events, sensitive data in logs, log injection via user input.</div><span class="tile-sev sev-m">MEDIUM</span></a>
+    <a class="vuln-tile" href="a10-ssrf.html"><div class="tile-id">A10:2021</div><div class="tile-name">SSRF</div><div class="tile-desc">Server fetches attacker-supplied URLs — reaching internal services and cloud metadata.</div><span class="tile-sev sev-c">CRITICAL</span></a>
+  </div>
+</main></body></html>
